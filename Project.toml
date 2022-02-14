@@ -1,0 +1,7 @@
+name = "ClGemmerator"
+uuid = "1a56ebaf-1aff-4d24-b62d-16077c03c2c5"
+authors = ["RuQing Xu <r-xu@g.ecc.u-tokyo.ac.jp>"]
+version = "0.1.0"
+
+[deps]
+OpenCL = "08131aa3-fb12-5dee-8b74-c09406e224a2"
