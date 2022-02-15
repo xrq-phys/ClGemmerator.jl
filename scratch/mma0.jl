@@ -36,22 +36,22 @@ const mma_kernel_str = "
                     __global $D_TYPE *c, const int ldc)
   {
     /*
-    // Compute unit id.
-    int iu = get_group_id(0);
-    int ju = get_group_id(1);
+    // Group id.
+    int ig = get_group_id(0);
+    int jg = get_group_id(1);
 
-    // Work item id.
+    // Item id.
     int it = get_local_id(0);
     int jt = get_local_id(1);
     */
 
-    int ig = get_global_id(0);
-    int jg = get_global_id(1);
+    int i_ = get_global_id(0);
+    int j_ = get_global_id(1);
 
     // Offset pointers.
-    a += ig * $M_ITEM;
-    b += jg * $N_ITEM;
-    c += ig * $M_ITEM + jg * $N_ITEM * ldc;
+    a += i_ * $M_ITEM;
+    b += j_ * $N_ITEM;
+    c += i_ * $M_ITEM + j_ * $N_ITEM * ldc;
 
     $REG_DEFS_A
     $REG_DEFS_B
@@ -76,24 +76,27 @@ open("/tmp/ker.cl", "w") do io
     write(io, mma_kernel_str)
 end
 
-a = rand(JlType, 256, 256);
-b = rand(JlType, 256, 256);
-c = ones(JlType, 256, 256);
+a = rand(JlType, 2048, 2048);
+b = rand(JlType, 2048, 2048);
+c = ones(JlType, 2048, 2048);
 
-device, ctx, queue = cl.create_compute_context()
+ctx = cl.create_some_context()
+queue = cl.CmdQueue(ctx, :profile)
 
 a_buff = cl.Buffer(JlType, ctx, (:r, :use), hostbuf=a)
 b_buff = cl.Buffer(JlType, ctx, (:r, :use), hostbuf=b)
 c_buff = cl.Buffer(JlType, ctx, (:w, :use), hostbuf=c)
 
-p = cl.Program(ctx, source=mma_kernel_str) |> cl.build!
-k = cl.Kernel(p, F_)
+prog = cl.Program(ctx, source=mma_kernel_str) |> cl.build!
+ker = cl.Kernel(prog, F_)
 
-queue(k, (64, 64), nothing,
-      256,
-      a_buff, strides(a)[2],
-      b_buff, strides(b)[2],
-      c_buff, strides(c)[2])
+evt = queue(ker, (512, 512), nothing,
+            size(a)[2],
+            a_buff, strides(a)[2],
+            b_buff, strides(b)[2],
+            c_buff, strides(c)[2])
 
 @show reduce(max, abs.(c - a * b' .- 1))
+@show evt[:profile_duration]
+@show 2 * size(a)[1]^3 / evt[:profile_duration] # GFLOPS/sec?
 
